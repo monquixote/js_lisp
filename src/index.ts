@@ -1,4 +1,4 @@
-import { tokenize, getAST, evaluate, tokenize2 } from './lisp'
+import { tokenize, buildAST, evaluate, run } from './lisp'
 
 /*
 const tokens = tokenize("(+ 1 2)")
@@ -54,6 +54,16 @@ const example6 = `
     )
 )
 `
+const example7 = `
+(
+    (
+        def x 123
+    )
+    (
+        + 3.2 x
+    )
+)
+`
 
 /*
 const tokens2 = tokenize(example5);
@@ -63,4 +73,11 @@ console.log(JSON.stringify(parsed2, null, 2))
 console.log(evaluate(parsed2))
 */
 
-console.log(tokenize2(example6, []));
+const tokens = tokenize(example7)
+        .map(token => token.token);
+console.log(tokens);
+const ast = buildAST(tokens);
+console.log(ast);
+console.log(evaluate(ast))
+
+console.log(run(example7))

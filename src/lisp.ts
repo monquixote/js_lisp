@@ -4,24 +4,8 @@ const rules = [
     { type: 'rParen', regex: /^\)/ },
     { type: 'number', regex: /^[0-9\.]+/ },
     { type: 'string', regex: /^".*?"/ },
-    { type: 'variable', regex: /^[^\s\(\)]+/ } // take from the beginning 1+ characters until you hit a ' ', '(', or ')' // TODO - support escaped double quote
+    { type: 'variable', regex: /^[^\s\(\)]+/ }
   ];
-  
-  
-  const tokenizer = rules => input => {
-    for (let i = 0; i < rules.length; i += 1) {
-      let tokenized = rules[i].regex.exec(input);
-      if (tokenized) {
-        return {
-          token: tokenized[0],
-          type: rules[i].type,
-          rest: input.slice(tokenized[0].length)
-        };
-      }
-    }
-  
-    throw new Error(`no matching tokenize rule for ${JSON.stringify(input)}`);
-  };
 
 function extractToken(input: string) {
     for(const rule of rules) {
@@ -36,69 +20,46 @@ function extractToken(input: string) {
     throw Error("Unable to extract token");
 }
 
-export function tokenize2(codeListing: string, currentTokens: any[]) {
+export function tokenize(codeListing: string, currentTokens: any[] = []) {
+    if(codeListing.length === 0) {
+        return currentTokens;
+    }
+
     const result = extractToken(codeListing);
 
     if(result.type !== 'space') {
         currentTokens.push(result);
     }
     const remainder = codeListing.slice(result.token.length);
-    if(remainder.length === 0) {
-        return currentTokens;
-    }
-
-    return tokenize2(remainder, currentTokens);
+   
+    return tokenize(remainder, currentTokens);
 }
 
-export function tokenize(codeListing: string): string[] {
-    return codeListing
-        .replace(/\n/g,'')
-        .replace(/\(/g, " ( ")
-        .replace(/\)/g, " ) ")
-        .split(' ')
-        .filter(x => x !== '');
+export function buildAST(tokens: string[]) {
+    return parseTokens({tokens, ast:[]}).ast[0];
 }
 
-export function getAST(tokens: string[]) {
-    return parse(tokens)[0][0];
+export function parseTokens({tokens, ast}) {
+    let [current, ...remainder] = tokens
+   
+    if(!current) {
+       return {tokens, ast}
+    }
+    if(current === ")") {
+        return {tokens:remainder, ast}
+    }
+    if(current === "(") {
+        const subParse = parseTokens({tokens:remainder, ast:[]});
+        current = subParse.ast;
+        remainder = subParse.tokens;
+    }
+
+    ast.push(convertValue(current))
+
+    return parseTokens({tokens:remainder, ast})
 }
 
-export function parse(tokens: string[]): any[] {
-    const [head, ...tail] = tokens
 
-    if(!head) {
-        console.log("EOF")
-       return [[], []]
-    }
-
-    // Close the scope 
-    if(head === ")") {
-        const rval =  [[], tail];
-        console.log("Close value", rval);
-        return rval
-    }
-
-    const [currentSet, remainder] = parse(tail);
-
-    // Open a new scope
-    if(head === "(") {
-        //Parse the rest
-        const [currentSet2, remainder2] = parse(remainder);
-        const rval = [
-            [currentSet, ...currentSet2],
-            remainder2
-        ]
-        console.log("Scope Open", rval)
-        return rval
-    }
-
-    const rval = [
-        [convertValue(head), ...currentSet], 
-        remainder
-    ]
-    console.log("Standard", rval);
-    return rval
-}
 
 function begin(...args: any[]) {
     return args.pop();
@@ -123,7 +84,13 @@ function convertValue(unknown: string) {
     return unknown;
 }
 
-
+export function run(program: string) {
+    const tokens = tokenize(program)
+        .map(token => token.token);
+    const ast = buildAST(tokens);
+    const result = evaluate(ast);
+    return result.pop();
+}
 
 export function evaluate(AST: any[]) {
     const [func, ...vals] = AST.map(e => {
@@ -138,7 +105,7 @@ export function evaluate(AST: any[]) {
     
     
     if(typeof func !== "function") {
-        throw Error(`${AST[0]} is not a recognised function`)
+       return [func, ...vals];
     }
     return func(...vals)
 }
